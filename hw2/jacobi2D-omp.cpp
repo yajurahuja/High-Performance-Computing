@@ -81,21 +81,26 @@ void print_u(double** u, int N)
 
 int main()
 {
-	Timer t;
-	int N = 10000;
+	//Timer t;
+	int N = 1000;
 	int iter = 100;
 	int nrThreads[6] = {1, 2, 4, 8, 32, 64};
 	double** f =  create_f(N);
 	double singleC;
+	double t = 1.0;
 	printf("N: %d, Number of Iteratins: %d\n", N, iter);
 
 	for(int nrTIndex = 0; nrTIndex < 6; nrTIndex++) 
 	{
 	    int nrT = nrThreads[nrTIndex];
-	    double t = omp_get_wtime();
-		double** u_jacobi = jacobi(N, f, iter, nrT);
-		t = omp_get_wtime() - t;
-		free(u_jacobi);
+	    #ifdef _OPENMP
+	    	t = omp_get_wtime();
+	    #endif
+	    double** u_jacobi = jacobi(N, f, iter, nrT);
+	    #ifdef _OPENMP
+	    	t = omp_get_wtime() - t;
+	    #endif   
+            free(u_jacobi);
 	    if(nrT == 1)
 	      singleC = t;
 	    printf("%d: time elapsed = %f, speedup = %f\n", nrT, t, singleC/t);

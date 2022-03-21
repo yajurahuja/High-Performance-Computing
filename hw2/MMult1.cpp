@@ -5,8 +5,8 @@
 #include <omp.h>
 #include "utils.h"
 
-#define BLOCK_SIZE 64
-#define nrT 8
+#define BLOCK_SIZE 8
+#define nrT 64
 
 // Note: matrices are stored in column major order; i.e. the array elements in
 // the (m x n) matrix C are stored in the sequence: {C_00, C_10, ..., C_m0,
@@ -29,7 +29,7 @@ void MMult0_p(long m, long n, long k, double *a, double *b, double *c) {
   long size_ = m*n;
   #pragma omp parallel num_threads(nrT)
   {
-    #pragma omp for reduction(+: c[0:size_])
+    #pragma omp for collapse(3) //reduction(+: c[0:size_])
     for (long i = 0; i < m; i++) {
       for (long j = 0; j < n; j++) {
         for (long p = 0; p < k; p++) {  
@@ -130,22 +130,22 @@ int main(int argc, char** argv) {
     double flops = (2 * m * n * k * NREPEATS);
     double floprate = flops / time / 1e9;
     double bandwidth = ((2 * (m * n)) * (k + 1) * NREPEATS * sizeof(double)) / time / 1e9; 
-    printf("%10d %10f %10f %10f *\n", p, time, flops, bandwidth);
+    printf("%10d %10f %10f %10f *  (Reference Matrix)\n", p, time, floprate, bandwidth);
     
     t.tic();
     for (long rep = 0; rep < NREPEATS; rep++) {
       MMult1_p(m, n, k, a, b, c);
     }
-    time = t.toc();
+    double time_ = t.toc();
 
-    flops = (2 * m * n * k * NREPEATS);
-    floprate = flops / time / 1e9;
-    bandwidth = ((2 * (m * n)) * (k + 1) * NREPEATS * sizeof(double)) / time / 1e9; 
-    printf("%10d %10f %10f %10f", p, time, flops, bandwidth);
+    double flops_ = (2.0 * m * n * k * NREPEATS);
+    double floprate_ = flops_ / time_ / 1e9;
+    double bandwidth_ = ((2 * (m * n)) * ((1. * k/BLOCK_SIZE) + 1) * NREPEATS * sizeof(double)) / time / 1e9; 
+    printf("%10d %10f %10f %10f", p, time_, floprate_, bandwidth_);
 
     double max_err = 0;
     for (long i = 0; i < m*n; i++) max_err = std::max(max_err, fabs(c[i] - c_ref[i]));
-    printf(" %10e\n", max_err);
+    printf(" %10e  (Blocked)\n", max_err);
 
     aligned_free(a);
     aligned_free(b);
