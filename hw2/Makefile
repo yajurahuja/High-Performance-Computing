@@ -7,7 +7,7 @@ va1: val_test01_solved.cpp
 	g++ -o val_test01_solved val_test01_solved.cpp
 
 va2: val_test02_solved.cpp
-	g++ -o val_test01_solved val_test02_solved.cpp
+	g++ -o val_test02_solved val_test02_solved.cpp
 
 omp2: omp_solved2.c
 	gcc -fopenmp -o omp_solved2 omp_solved2.c
@@ -35,4 +35,4 @@ gs: gs2D-omp.cpp
 
 
 clean : 
-	rm -rf val_test01_solved val_test01_solved omp_solved2 omp_solved3 omp_solved4 omp_solved5 omp_solved6 MMult1 jacobi2D-omp gs2D-omp
+	rm -rf val_test01_solved val_test02_solved omp_solved2 omp_solved3 omp_solved4 omp_solved5 omp_solved6 MMult1 jacobi2D-omp gs2D-omp
