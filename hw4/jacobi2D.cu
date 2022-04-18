@@ -18,31 +18,18 @@ __global__ void jacobiGPU(double* u, double* u_prev, double* u_error, double* f,
 {
 	long row = blockIdx.y * blockDim.y + threadIdx.y; //calculate the row index
 	long col = blockIdx.x * blockDim.x + threadIdx.x;//calclate the col index
-	__syncthreads();
+
 	if(1 <= row && row <= N && 1 <= col && col <= N)
 	{
 		u[(row * (N+2)) + col] = 0.25 * (h_2 * f[(row * (N+2)) + col] + u_prev[((row - 1) * (N+2)) + col] + u_prev[(row * (N + 2)) + (col-1)] + u_prev[((row+1) * (N + 2)) + (col)] + u_prev[(row * (N + 2)) + (col +1)]);
 		__syncthreads();
-		//u_error[(row * (N + 2)) + col] = fabs(u_prev[(row * (N + 2)) + col] - u[(row * (N + 2)) + col]);
+		u_error[(row * (N + 2)) + col] = fabs(u_prev[(row * (N + 2)) + col] - u[(row * (N + 2)) + col]);
+		__syncthreads();
 		u_prev[(row * (N + 2)) + col] = u[(row * (N + 2)) + col];
 		__syncthreads();
 	}
 
 }
-
-
-// __global__ void jacobi_GPU(double* u, double* u_prev, long N)
-// {
-// 	long row = blockIdx.y * blockDim.y + threadIdx.y; //calculate the row index
-// 	long col = blockIdx.x * blockDim.x + threadIdx.x;//calclate the col index
-// 	__syncthreads();
-// 	if(1 <= row && row <= N && 1 <= col && col <= N)
-// 	{
-// 		u_prev[(row * (N + 2)) + col] = u[(row * (N + 2)) + col];
-// 		__syncthreads();
-// 	}
-
-// }
 
 
 int main()
@@ -55,7 +42,7 @@ void test_jacobi()
 {
 	
 	
-	for(long N = 100; N < 1400; N += 100)
+	for(long N = 100; N < 1000; N += 100)
 	{
 	long iter = 1000;
 	double h_2 = 1.0 / ((N+1) *(N+1));
@@ -98,20 +85,26 @@ void test_jacobi()
 	dim3 threads(thread, thread);
 	dim3 grid(grid_r, grid_c);
 	double gputime = 0.0;
-	
+	double maxResidual = -1;
 	for(long i = 0; i < iter; i++)
 	{
 		double maxError = -1;
 		tt = omp_get_wtime();
 		jacobiGPU<<<grid, threads>>>(u_d, u_prev_d, u_error_d, f_d, N, h_2, iter);
-		cudaMemcpy(u_error, u_error_d, (N+2) * (N+2) *sizeof(double), cudaMemcpyDeviceToHost);
+		cudaMemcpyAsync(u_error, u_error_d, (N+2) * (N+2) *sizeof(double), cudaMemcpyDeviceToHost);
+		cudaMemcpyAsync(u, u_d, (N+2) * (N+2) *sizeof(double), cudaMemcpyDeviceToHost);
 		cudaDeviceSynchronize();
 		gputime += omp_get_wtime() - tt;
 
 		//find error
-		for(int i = 0; i < (N + 2) * (N + 2); i++)
-			if(maxError < u_error[i])
-				maxError = u_error[i];
+		for(int i = 1; i <= N; i++)
+			for(int j = 1; j <= N; j++)
+		{
+			if(maxError < u_error[i * (N+2) + j])
+				maxError = u_error[i * (N+2) + j];
+			if(maxResidual < u_error[i * (N+2) + j])
+				maxResidual = u_error[i * (N+2) + j];
+		}
 		// jacobi_GPU<<<grid, threads>>>(u_d, u_prev_d, N);
 		// cudaDeviceSynchronize();
 		//printf("residual: %e\n", maxError);
@@ -122,8 +115,16 @@ void test_jacobi()
 	cudaDeviceSynchronize();
 	gputime += omp_get_wtime() - tt;
 
+	//Max error
+	double maxCGerror = -1;
+	for(int i = 1; i <= N; i++)
+		for(int j = 1; j <= N; j++)
+		{	
+			if(maxCGerror < fabs(u[(i * (N+2)) + j] - u_ref[i][j]))
+				maxCGerror = fabs(u[(i * (N+2)) + j] - u_ref[i][j]);
+		}
 	//print_error(u, u_ref, N);
-	printf("N: %d, Iterations: %d, Error: %e, CPUTime: %f, GPUTime: %f, Speed Up: %f\n", N, iter, norm(u, u_ref, N), cputime, gputime, cputime/gputime);
+	printf("N: %d, Iterations: %d, Total Error: %e, Max residual(any elem): %e, MaxCPUGPUerror(any elem): %e, CPUTime: %f, GPUTime: %f, Speed Up: %f\n", N, iter, norm(u, u_ref, N), maxResidual, maxCGerror, cputime, gputime, cputime/gputime);
 	// print_u(u_ref, N);
 	// print_uGPU(u, N);
 	// print_u(f, N);
